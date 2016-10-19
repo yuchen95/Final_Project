@@ -17,16 +17,16 @@ output:
 * Name: 
 * Project title:
 * Write-up on RPubs: <http://rpubs.com/rudeboybert/Tree_Growth_Differences>
-* Abstract: Hello World
+* Abstract: Hello World!
 
 
-```{r, echo=FALSE, message=FALSE, echo=FALSE}
+```{r, echo=FALSE, message=FALSE}
 #
 # Include code for one plot here
 #
 library(ggplot2)
 library(dplyr)
-small <- sample_n(diamonds, 1000) 
+small <- sample_n(diamonds, 2000) 
 ggplot(data=diamonds, aes(x=carat,y=price,colour=cut)) +
   geom_point() +
   scale_y_log10() + 
