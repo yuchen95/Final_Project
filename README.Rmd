@@ -31,6 +31,6 @@ ggplot(data=diamonds, aes(x=carat,y=price,colour=cut)) +
   geom_point() +
   scale_y_log10() + 
   facet_wrap(~cut) +
-  ggtitle("Replace this one for one of your own")
+  ggtitle("Replace this plot with one of your own")
 ```
 
