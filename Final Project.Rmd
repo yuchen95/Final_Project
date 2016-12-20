@@ -1,0 +1,56 @@
+---
+title: "Final Project"
+author: "Yuchen Zhu"
+date: "12/20/2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE}
+# Packages
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(lubridate)
+library(forcats)
+library(knitr)
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(stringr)
+library(broom)
+library(rgdal)
+library(maptools)
+library(leaflet)
+```
+
+## Motivation
+
+
+```{r, echo=FALSE, message=FALSE}
+# Data
+racial_comp <- read_excel("racial_comp.xlsx", 
+    sheet = "School")
+location <- read_excel("location.xlsx")
+schools <- read_excel("school_list.xlsx")
+```
+
+```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
+# Join location data with a list of schools
+location <- location %>% 
+  filter(year == "2015-16") %>% 
+  select(ats_code, lat, long)
+schools <- left_join(schools, location, by = "ats_code") %>% 
+  head()
+
+
+leaflet(data = schools) %>% 
+  addTiles() %>%
+  addMarkers(~long, ~lat, popup = ~name)
+```
+
+

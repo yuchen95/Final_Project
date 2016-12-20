@@ -14,11 +14,49 @@ output:
 ---
 
 
-* Name: 
-* Project title:
+* Name: Yuchen Zhu
+* Project title: Segregated Public Schools in New York City 
 * Write-up on RPubs: <http://rpubs.com/rudeboybert/Tree_Growth_Differences>
-* Abstract: Hello World!
+* Abstract: 
 
+
+```{r, echo=FALSE, message=FALSE}
+#
+# Import packages and data
+#
+# Packages
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(stringr)
+library(broom)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(rgdal)
+library(maptools)
+library(leaflet)
+
+# Data
+racial_comp <- read_excel("racial_comp.xlsx", 
+    sheet = "School")
+location <- read_excel("location.xlsx")
+schools <- read_excel("school_list.xlsx")
+```
+
+```{r, echo=FALSE, message=FALSE}
+# Join location data with a list of schools
+location <- location %>% 
+  filter(year == "2015-16") %>% 
+  select(ats_code, lat, long)
+schools <- left_join(schools, location, by = "ats_code")
+
+```
 
 ```{r, echo=FALSE, message=FALSE}
 #
@@ -34,3 +72,4 @@ ggplot(data=diamonds, aes(x=carat,y=price,colour=cut)) +
   ggtitle("Replace this plot with one of your own")
 ```
 
+1. rename columns in excel
