@@ -1,5 +1,5 @@
 ---
-title: "Final Project"
+title: "Racial Segregation at Public Schools"
 author: "Yuchen Zhu"
 date: "12/20/2016"
 output: html_document
@@ -15,42 +15,314 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(readr)
-library(lubridate)
-library(forcats)
 library(knitr)
 library(readxl)
 library(ggplot2)
 library(tidyverse)
-library(stringr)
+library(forcats)
+library(gridExtra)
 library(broom)
 library(rgdal)
 library(maptools)
 library(leaflet)
+library(shiny)
 ```
 
 ## Motivation
 
+62 years have past since Brown v. Board of Education, a landmark US Supreme Court case that ruled state laws establishing separate public schools for black and white students to be unconstitutional. Although racial segregation by law at schools became obsolete ever since, racial segregation for a variety of other reasons persists until today. This persisting segregation inhibits interaction among different demographic groups at a young age, prohibiting students from developing emphathy and better understanding of people of other races. Such competency is especially important for the United States as a multi-ethnic and multi-cultural country that holds everyone to be created equal. Moreover, such racial segregation at public schools often also comes with a disproportional distribution of not only educational but also other resources, leading to unequal levels of education outcomes.
+
+## Goals
+
+This data science project aims to give the audience a sense of the scope of this problem and negative outcomes associated with it in order to raise awareness of the issue and call for more actions to build more inclusive public schools. The project specifically examines New York City because although often viewed as an epitome of American diversity and inclusivity, its public schools clearly do not live up to these ideals.
+
+## Data
+
+The project uses data from New York City Department of Education <http://schools.nyc.gov/Accountability/data/default.html> and NYC Open Data <https://nycopendata.socrata.com>. Specifically, it uses the data of racial composition of each schools from 2011-2015, number and rate of students in poverty from 2011-2015, graduation rate by race for cohorts of 2001 through 2011 (classes of 2005 through 2015), and location of each school in school year 2015-2016.
 
 ```{r, echo=FALSE, message=FALSE}
 # Data
+# I mannually renamed column names and did some simple cleaning in excel.
 racial_comp <- read_excel("racial_comp.xlsx", 
     sheet = "School")
-location <- read_excel("location.xlsx")
+graduation <- read_excel("graduation_2015.xlsx", sheet = "TotalCohort")
 schools <- read_excel("school_list.xlsx")
+location <- read_excel("location.xlsx")
 ```
 
-```{r, echo=TRUE, message=TRUE, warning=TRUE, fig.width=8, fig.height=4.5}
+## Analysis
+
+### Baseline
+
+First, in order to study the segregated schools in New York City, we need to first get an idea of who attend public schools there first.
+
+```{r, echo=FALSE, message=FALSE}
+# Baseline
+baseline <- racial_comp %>% 
+  group_by(year) %>% 
+  summarise(num_schools = length(name),
+            total = sum(total), 
+            white = sum(num_white), prop_white = round(sum(num_white)/sum(total), 2),
+            asian = sum(num_asian), prop_asian = round(sum(num_asian)/sum(total), 2),
+            black = sum(num_black), prop_black = round(sum(num_black)/sum(total), 2),
+            hispanic = sum(num_hispanic), prop_hispanic = round(sum(num_hispanic)/sum(total), 2),
+            poverty = sum(num_poverty), prop_poverty = round(sum(num_poverty)/sum(total), 2)) %>%
+  filter(year == "2015-16" | year == "2014-15")
+kable(baseline)
+```
+
+```{r, echo=FALSE, message=FALSE}
+# Tidy data format for plotting
+baseline_tidy <- baseline %>% 
+  gather(key = race, value = number, `white`, `asian`, `black`, `hispanic`) %>% 
+  select(year, num_schools, total, race, number) %>% 
+  mutate(prop = number/total) %>% 
+  filter(year == "2015-16")
+  
+ggplot(data = baseline_tidy, aes(x = race, y = prop)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Racial Composition of Public School Student, 2015-16")
+```
+
+In 2015-16, there are over 1 million students attending 1856 public schools in New York City, among whom 15% are White, 16% Asian, 27% Black, and 41% Hispanic. According to the DOE website, NYC DOE “Poverty” counts are based on the number of students with families who have qualified for free or reduced price lunch, or are eligible for Human Resources Administration (HRA) benefits. In 2015-16, 78% of students are considered as "poor".
+
+To put it into perspective, New York City overall has a population of 44.6% White, 25.1% Black, 27.5% Hispanic, and 11.8% Asian, according to the 2010 census. The discrepancy is clear. White kids do not go to public schools nearly as much as minorities.
+
+```{r, echo=FALSE, message=FALSE}
+# Cleaning
+# Racial composition over time
+```
+
+### Major schools with highest percentage of each race
+
+We now look at major schools with more than 1000 students that have highest percentage of each race. Clearly, there still are a number of schools with very high percentage of a single race.
+
+```{r, echo=FALSE, message=FALSE}
+# Black
+racial_comp %>% 
+  filter(total > 1000, year == "2015-16") %>% 
+  select(name, total, prop_black) %>% 
+  arrange(desc(prop_black)) %>% 
+  head(3) %>% 
+  kable()
+
+# Hispanic
+racial_comp %>% 
+  filter(total > 1000, year == "2015-16") %>% 
+  select(name, total, prop_hispanic) %>% 
+  arrange(desc(prop_hispanic)) %>% 
+  head(3) %>% 
+  kable()
+
+# Asian
+racial_comp %>% 
+  filter(total > 1000, year == "2015-16") %>% 
+  select(name, total, prop_asian) %>% 
+  arrange(desc(prop_asian)) %>% 
+  head(3) %>% 
+  kable()
+
+# White
+racial_comp %>% 
+  filter(total > 1000, year == "2015-16") %>% 
+  select(name, total, prop_white) %>% 
+  arrange(desc(prop_white)) %>% 
+  head(3) %>% 
+  kable()
+```
+
+### Segregated schools
+
+Considering the historic context of the United States, the project defines "segregated" schools as schools with fewer than 10% of White students, and "ultra-segregated" as schools with fewer than 1% of White students. How many schools in 2015-16 fall in these two categories? How have they evolved over time?
+
+```{r, echo=FALSE, message=FALSE}
+# Define segragated and ultra-segregated
+racial_comp <- racial_comp %>%
+  mutate(segregated = ifelse(prop_white < 0.1, 1, 0)) %>% 
+  mutate(ultra_segregated = ifelse(prop_white < 0.01, 1, 0))
+
+# Trend of the prop of segregated schools
+trend <- racial_comp %>% 
+  group_by(year) %>% 
+  summarise(prop_segregated = mean(segregated), num_segregated = sum(segregated))
+
+prop <- ggplot(data = trend, aes(x = year, y = prop_segregated, group = 1)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Proportion of Segregated Schools", xlab = "Year", ylab = "Proportion")
+num <- ggplot(data = trend, aes(x = year, y = num_segregated, group = 1)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Number of Segregated Schools", xlab = "Year", ylab = "Number")
+grid.arrange(prop, num, ncol=2) 
+```
+
+In 2015-16, 70.7% (1313 out of 1856) of schools have fewer than 10% of White students. Although the proportion of segregated schools has been fluctuating around 70-71%, the number of segregated schools is increasing, which could be due to an increase of schools in general.
+
+```{r, echo=FALSE, message=FALSE}
+# Trend of the prop of ultra segregated schools
+trend_ultra <- racial_comp %>% 
+  group_by(year) %>% 
+  summarise(prop_ultra_segregated = mean(ultra_segregated), num_ultra_segregated = sum(ultra_segregated))
+
+prop <- ggplot(data = trend_ultra, aes(x = year, y = prop_ultra_segregated, group = 1)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Proportion of Ultra-egregated Schools", xlab = "Year", ylab = "Proportion")
+num <- ggplot(data = trend_ultra, aes(x = year, y = num_ultra_segregated, group = 1)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Number of Ultra-egregated Schools", xlab = "Year", ylab = "Number")
+grid.arrange(prop, num, ncol=2) 
+```
+
+Fortunately, both the proportion and number of ultra-segregated schools have demonstrated an unequivocal declining trend, which could be due to some measure in increasing diversity. Keep in mind, 1% is a low bar for the percentage of White students at a school in a city where 44.6% are White.
+
+### Where are these schools?
+
+To map these schools, geo-point data of each school need to be combined with racial composition data.
+
+```{r, echo=FALSE, message=FALSE}
 # Join location data with a list of schools
 location <- location %>% 
   filter(year == "2015-16") %>% 
   select(ats_code, lat, long)
 schools <- left_join(schools, location, by = "ats_code") %>% 
-  head()
-
-
-leaflet(data = schools) %>% 
-  addTiles() %>%
-  addMarkers(~long, ~lat, popup = ~name)
+  filter(!is.na(lat)) %>% 
+  filter(lat > 30) %>% 
+  select(ats_code, category, lat, long)
 ```
 
+##### Location of segregated and ultra-segregated schools:
 
+Red stands for ultra-segregated schools; purple stands for segregated schools.
+
+```{r, echo=FALSE, message=FALSE}
+segregated_location_2015 <- racial_comp %>% 
+  filter(year == "2015-16") %>% 
+  left_join(., schools, by = "ats_code") %>% 
+  filter(segregated == 1)
+
+ultra_segregated_location_2015 <- racial_comp %>% 
+  filter(year == "2015-16") %>% 
+  left_join(., schools, by = "ats_code") %>% 
+  filter(ultra_segregated == 1)
+
+leaflet() %>% 
+  addTiles() %>%
+  # Not sure why it is not working
+  addCircleMarkers(data = ultra_segregated_location_2015, lng = ~long, lat = ~lat, color = "#FF0000", popup = ~name) %>% 
+  addCircleMarkers(data = segregated_location_2015, lng = ~long, lat = ~lat, color = "#5633FF", popup = ~name)
+```
+
+### Segregated school and poverty
+
+Now let's examine "poverty" rate at segregated school, non-segregated schools, and all schools.
+
+```{r, echo=FALSE, message=FALSE}
+racial_comp %>% 
+  summarise(sum(num_poverty)/sum(total))
+
+poverty <- racial_comp %>% 
+  group_by(segregated) %>% 
+  summarise(prop_poverty = sum(num_poverty)/sum(total))
+
+ggplot(data = poverty, aes(x = as.factor(segregated), y = prop_poverty, group = segregated)) +
+  geom_bar(stat = "identity") +
+  geom_hline(aes(yintercept = 0.7990182)) +
+  labs(title = "Poverty Rate: Non-segregated vs. Segregated")
+  
+```
+
+Overall 80% of students are "poor", while 89% of students attending segregated schools are "poor". Not surprisingly, only 64% of people attending non-segregated schools are "poor".
+
+### Segregated (high) school and graduation rate
+
+We can look at graduation rate to assess its correlation with education outcome. I use recent 5 cohorts' cumulative graduation rate as an indication of education outcome. 
+
+```{r, echo=FALSE, message=FALSE}
+# Using recent cumulative graduation rate as an indication of education outcome
+graduation <- graduation %>% 
+  filter(year == 2007 | year == 2008 | year == 2009 | year == 2010 | year == 2011) %>% 
+  filter(num_grad != "s") %>% 
+  group_by(ats_code) %>% 
+  summarise(rate = sum(as.numeric(num_grad))/sum(total))
+
+segregated <- racial_comp %>% 
+  left_join(., schools, by = "ats_code") %>% 
+  filter(year == "2015-16" & (category == "High school" | category == "K-12 all grades")) %>% 
+  select(ats_code, segregated, ultra_segregated)
+
+#overall_graduation_rate
+left_join(graduation, segregated, by = "ats_code") %>% 
+  filter(!is.na(segregated)) %>% 
+  summarise(rate = mean(rate))
+  
+graduation <- left_join(graduation, segregated, by = "ats_code") %>% 
+  filter(!is.na(segregated)) %>% 
+  group_by(segregated) %>% 
+  summarise(rate = mean(rate))
+
+ggplot(data = graduation, aes(x = as.factor(segregated), y = rate, group = segregated)) +
+  geom_bar(stat = "identity") +
+  geom_hline(aes(yintercept = 0.6851106)) +
+  labs(title = "Graduation Rate: Non-segregated vs. Segregated")
+```
+
+### Proportion of students attending segregated schools
+
+How many percent of students of each race are actually attending these segregated schools? We discussed earlier that 70% of the schools are segregated, but how do they affect each racial group differently? Here I am calculating the proportion of students attending segregated schools.
+
+```{r, echo=FALSE, message=FALSE}
+attending_seg <- racial_comp %>% 
+  group_by(year, segregated) %>% 
+  summarise(num_total = sum(total),
+            num_white = sum(num_white),
+            num_asian = sum(num_asian),
+            num_black = sum(num_black),
+            num_hispanic = sum(num_hispanic)) %>% 
+  mutate(prop_total = num_total/sum(num_total)) %>% 
+  mutate(prop_white = num_white/sum(num_white)) %>% 
+  mutate(prop_asian = num_asian/sum(num_asian)) %>% 
+  mutate(prop_black = num_black/sum(num_black)) %>% 
+  mutate(prop_hispanic = num_hispanic/sum(num_hispanic)) %>% 
+  # Tidy
+  select(year, segregated, prop_total, prop_white, prop_asian, prop_black, prop_hispanic) %>% 
+  gather(key = race, value = prop, `prop_total`, `prop_white`, `prop_asian`, `prop_black`, `prop_hispanic`) %>% 
+  filter(segregated == 1)
+
+seg <- ggplot(data = attending_seg, aes(x = year, group = race, colour = race)) +
+  geom_line(aes(y = prop))
+```
+
+```{r, echo=FALSE, message=FALSE}
+attending_ultra_seg <- racial_comp %>% 
+  group_by(year, ultra_segregated) %>% 
+  summarise(num_total = sum(total),
+            num_white = sum(num_white),
+            num_asian = sum(num_asian),
+            num_black = sum(num_black),
+            num_hispanic = sum(num_hispanic)) %>% 
+  mutate(prop_total = num_total/sum(num_total)) %>% 
+  mutate(prop_white = num_white/sum(num_white)) %>% 
+  mutate(prop_asian = num_asian/sum(num_asian)) %>% 
+  mutate(prop_black = num_black/sum(num_black)) %>% 
+  mutate(prop_hispanic = num_hispanic/sum(num_hispanic)) %>% 
+  # Tidy
+  select(year, ultra_segregated, prop_total, prop_white, prop_asian, prop_black, prop_hispanic) %>% 
+  gather(key = race, value = prop, `prop_total`, `prop_white`, `prop_asian`, `prop_black`, `prop_hispanic`) %>%
+  filter(ultra_segregated == 1)
+
+ultra <- ggplot(data = attending_ultra_seg, aes(x = year, group = race, colour = race)) +
+  geom_line(aes(y = prop))
+
+grid.arrange(seg, ultra, ncol = 2)
+```
+
+The above graph shows that about 85% of all Black students attend segregated schools, as well as 63% of Hispanic students, and 43% of Asian students. Overall, 62% of studnets are attending segregated schools. Very few White students go to schools where fewer than 10% are White. The trends have been steady since 2011.
+
+Trends of proportion of students attending ultra-segregated schools are declining. 33% of all Black students in New York City used to attend schools where fewer than 1% were White in 2011, but only 28% did in 2015. Hispanic students attending ultra-segregated schools declined from 24% in 2011 to 17% in 2015. These are all positive signs.
+
+## Improvement to be made
+
+Chinese Internet censorship (aka Great Fire Wall) inhibited my productivity by a lot more than I expected. I could have made a Shiny App so that users are able to make their own criteria for "segregated" schools: by a percentage of any race or a combination of races they pick. A Shiny App may able enable users to focus on a specific type of schools, for example, segregated high schools. The App should show how the curves that I had in this project shift as criteria and school category change. I also would have liked to perfect the Leaflet map, ideally include it within the Shiny App so that the markers change as users manipulate the app. I would have made markers colored with different level of transparency to indicate what the dominant race is at the school and how strongly it dominates (in terms of proportion).
+
+## Conclusion
+
+Overall, this research project revealed the prevalence of racial segregation at public schools in one of the most diverse and supposedly inclusive cities in the world. This segregation also comes with a divide in both student socio-economic background and educaiton outcome. It is important to realize that it takes more than a Supreme Court ruling to realize a true societal change, and there are effort to be made for more inclusivity.

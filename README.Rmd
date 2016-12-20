@@ -16,47 +16,8 @@ output:
 
 * Name: Yuchen Zhu
 * Project title: Segregated Public Schools in New York City 
-* Write-up on RPubs: <http://rpubs.com/rudeboybert/Tree_Growth_Differences>
-* Abstract: 
-
-
-```{r, echo=FALSE, message=FALSE}
-#
-# Import packages and data
-#
-# Packages
-library(readxl)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(tidyverse)
-library(ggplot2)
-library(dplyr)
-library(readr)
-library(stringr)
-library(broom)
-library(knitr)
-library(dplyr)
-library(ggplot2)
-library(rgdal)
-library(maptools)
-library(leaflet)
-
-# Data
-racial_comp <- read_excel("racial_comp.xlsx", 
-    sheet = "School")
-location <- read_excel("location.xlsx")
-schools <- read_excel("school_list.xlsx")
-```
-
-```{r, echo=FALSE, message=FALSE}
-# Join location data with a list of schools
-location <- location %>% 
-  filter(year == "2015-16") %>% 
-  select(ats_code, lat, long)
-schools <- left_join(schools, location, by = "ats_code")
-
-```
+* Write-up on RPubs: <http://rpubs.com/ZhuYuchen/final>
+* Abstract: 62 years have past since Brown v. Board of Education, a landmark US Supreme Court case that ruled state laws establishing separate public schools for black and white students to be unconstitutional. Although racial segregation by law at schools became obsolete ever since, racial segregation for a variety of other reasons persists until today.
 
 ```{r, echo=FALSE, message=FALSE}
 #
@@ -64,12 +25,30 @@ schools <- left_join(schools, location, by = "ats_code")
 #
 library(ggplot2)
 library(dplyr)
-small <- sample_n(diamonds, 2000) 
-ggplot(data=diamonds, aes(x=carat,y=price,colour=cut)) +
-  geom_point() +
-  scale_y_log10() + 
-  facet_wrap(~cut) +
-  ggtitle("Replace this plot with one of your own")
-```
+library(readxl)
+library(tidyr)
 
-1. rename columns in excel
+racial_comp <- read_excel("racial_comp.xlsx", 
+    sheet = "School")
+
+baseline <- racial_comp %>% 
+  group_by(year) %>% 
+  summarise(num_schools = length(name),
+            total = sum(total), 
+            white = sum(num_white), prop_white = round(sum(num_white)/sum(total), 2),
+            asian = sum(num_asian), prop_asian = round(sum(num_asian)/sum(total), 2),
+            black = sum(num_black), prop_black = round(sum(num_black)/sum(total), 2),
+            hispanic = sum(num_hispanic), prop_hispanic = round(sum(num_hispanic)/sum(total), 2),
+            poverty = sum(num_poverty), prop_poverty = round(sum(num_poverty)/sum(total), 2)) %>%
+  filter(year == "2015-16" | year == "2014-15")
+
+baseline_tidy <- baseline %>% 
+  gather(key = race, value = number, `white`, `asian`, `black`, `hispanic`) %>% 
+  select(year, num_schools, total, race, number) %>% 
+  mutate(prop = number/total) %>% 
+  filter(year == "2015-16")
+  
+ggplot(data = baseline_tidy, aes(x = race, y = prop)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Racial Composition of Public School Student, 2015-16")
+```
